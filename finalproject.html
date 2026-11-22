@@ -1,0 +1,353 @@
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> بازی دوز پیشرفته</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-image: url('bg.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            height: 100vh;
+            color: #fae7cb;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        
+        /* استایل صفحات مختلف */
+        .screen { display: none; width: 100%; max-width: 400px; }
+        .active { display: block; }
+
+        h1 { margin-bottom: 30px; color: #fae7cb; }
+        
+        /* دکمه‌ها */
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            transition: transform 0.2s, background 0.3s;
+            width: 80%;
+        }
+        button:hover { transform: scale(1.05); }
+        
+        .btn-start { background-color: #59b292; color: #fae7cb; }
+        .btn-easy { background-color: #2ecc71; color: white; }
+        .btn-medium { background-color: #f1c40f; color: #2c3e50; }
+        .btn-hard { background-color: #e74c3c; color: white; }
+        .btn-restart { background-color: #95a5a6; color: white; margin-top: 20px; }
+        .btn-change-level { background-color: #3498db; color: white; margin-top: 10px; }
+
+        /* صفحه بازی */
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .score-item { font-size: 0.9rem; }
+        .score-val { font-weight: bold; font-size: 1.2rem; display: block; }
+
+        .status { margin-bottom: 15px; font-size: 1.2rem; color: #f39c12; min-height: 1.5em;}
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            gap: 8px;
+            justify-content: center;
+        }
+        .cell {
+            width: 80px;
+            height: 80px;
+            background-color: #34495e;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell:hover { background-color: #46627f; }
+        .cell.x { color: #e74c3c; }
+        .cell.o { color: #3498db; }
+
+    </style>
+</head>
+<body>
+
+    <!-- صفحه ۱: خوش‌آمدگویی -->
+    <div id="welcome-screen" class="screen active">
+        <h1> به بازی دوز خوش آمدید</h1>
+        <p style="margin-bottom: 40px;"> برای شروع بازی روی دکمه زیر کلیک کنید</p>
+        <button class="btn-start" onclick="showLevelSelection()"> شروع بازی</button>
+    </div>
+
+    <!-- صفحه ۲: انتخاب سطح سختی -->
+    <div id="level-screen" class="screen">
+        <h1> سطح دشواری را انتخاب کنید</h1>
+        <button class="btn-easy" onclick="startGame('easy')"> آسان </button>
+        <button class="btn-medium" onclick="startGame('medium')"> متوسط </button>
+        <button class="btn-hard" onclick="startGame('hard')"> سخت </button>
+    </div>
+
+    <!-- صفحه ۳: محیط بازی -->
+    <div id="game-screen" class="screen">
+        <div class="scoreboard">
+            <div class="score-item"><span class="score-val" id="wins">0</span> برد شما</div>
+            <div class="score-item"><span class="score-val" id="draws">0</span> مساوی</div>
+            <div class="score-item"><span class="score-val" id="losses">0</span> باخت شما</div>
+        </div>
+
+        <div class="status" id="status"> نوبت شماست (X)</div>
+        
+        <div class="board" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+
+        <button class="btn-restart" onclick="resetGame()"> بازی مجدد</button>
+        <button class="btn-change-level" onclick="showLevelSelectionFromGame()"> تغییر سطح دشواری</button>
+    </div>
+
+    <script>
+        // متغیرهای وضعیت
+        let gameState = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = true;
+        let currentDifficulty = 'medium';
+        const human = 'X';
+        const ai = 'O';
+
+        // آمار بازی
+        let stats = { wins: 0, draws: 0, losses: 0 };
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        const cells = document.querySelectorAll('.cell');
+        const statusDisplay = document.getElementById('status');
+
+        // مدیریت صفحات
+        function showLevelSelection() {
+            document.getElementById('welcome-screen').classList.remove('active');
+            document.getElementById('level-screen').classList.add('active');
+        }
+
+        function startGame(difficulty) {
+            currentDifficulty = difficulty;
+            document.getElementById('level-screen').classList.remove('active');
+            document.getElementById('game-screen').classList.add('active');
+            resetGame();
+        }
+
+        // تابع جدید برای بازگشت به انتخاب سطح از داخل بازی
+        function showLevelSelectionFromGame() {
+            document.getElementById('game-screen').classList.remove('active');
+            document.getElementById('level-screen').classList.add('active');
+        }
+
+        function updateScoreUI() {
+            document.getElementById('wins').innerText = stats.wins;
+            document.getElementById('draws').innerText = stats.draws;
+            document.getElementById('losses').innerText = stats.losses;
+        }
+
+        // منطق اصلی بازی
+        function handleCellClick(clickedCellEvent) {
+            const clickedCell = clickedCellEvent.target;
+            const clickedCellIndex = parseInt(clickedCell.getAttribute('data-index'));
+
+            if (gameState[clickedCellIndex] !== "" || !gameActive) return;
+
+            makeMove(clickedCellIndex, human);
+            
+            if (checkWin(human)) {
+                endGame("تبریک! تو بردی!", 'win');
+                return;
+            }
+            if (checkDraw()) {
+                endGame("مساوی شد!", 'draw');
+                return;
+            }
+
+            gameActive = false;
+            statusDisplay.innerText = "نوبت کامپیوتر...";
+            
+            setTimeout(() => {
+                aiMove();
+                if (checkWin(ai)) {
+                    endGame("کامپیوتر برد!", 'lose');
+                } else if (checkDraw()) {
+                    endGame("مساوی شد!", 'draw');
+                } else {
+                    gameActive = true;
+                    statusDisplay.innerText = "نوبت شماست (X)";
+                }
+            }, 400);
+        }
+
+        function makeMove(index, player) {
+            gameState[index] = player;
+            cells[index].innerText = player;
+            cells[index].classList.add(player.toLowerCase());
+        }
+
+        function aiMove() {
+            let move;
+            if (currentDifficulty === 'easy') {
+                move = getRandomMove();
+            } else if (currentDifficulty === 'medium') {
+                move = getMediumMove();
+            } else {
+                move = getBestMove(); // Minimax
+            }
+            makeMove(move, ai);
+        }
+
+        // --- سطوح هوش مصنوعی ---
+
+        function getRandomMove() {
+            let available = gameState.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
+            return available[Math.floor(Math.random() * available.length)];
+        }
+
+        function getMediumMove() {
+            // 1. بردن اگر ممکن است
+            let move = findWinningMove(ai);
+            if (move !== -1) return move;
+            // 2. جلوگیری از برد حریف
+            move = findWinningMove(human);
+            if (move !== -1) return move;
+            // 3. مرکز
+            if (gameState[4] === "") return 4;
+            // 4. تصادفی
+            return getRandomMove();
+        }
+
+        function findWinningMove(player) {
+            for (let condition of winningConditions) {
+                const [a, b, c] = condition;
+                const values = [gameState[a], gameState[b], gameState[c]];
+                const playerCount = values.filter(v => v === player).length;
+                const emptyCount = values.filter(v => v === "").length;
+
+                if (playerCount === 2 && emptyCount === 1) {
+                    if (gameState[a] === "") return a;
+                    if (gameState[b] === "") return b;
+                    if (gameState[c] === "") return c;
+                }
+            }
+            return -1;
+        }
+
+        // الگوریتم Minimax برای سطح سخت
+        function getBestMove() {
+            let bestScore = -Infinity;
+            let move;
+            for (let i = 0; i < 9; i++) {
+                if (gameState[i] === "") {
+                    gameState[i] = ai;
+                    let score = minimax(gameState, 0, false);
+                    gameState[i] = "";
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
+        function minimax(board, depth, isMaximizing) {
+            if (checkWinForMinimax(ai)) return 10 - depth;
+            if (checkWinForMinimax(human)) return depth - 10;
+            if (!board.includes("")) return 0;
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === "") {
+                        board[i] = ai;
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = "";
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === "") {
+                        board[i] = human;
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = "";
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        // تابع کمکی برای چک کردن برد در Minimax (بدون تغییر DOM)
+        function checkWinForMinimax(player) {
+            return winningConditions.some(condition => {
+                return condition.every(index => gameState[index] === player);
+            });
+        }
+
+        // --- توابع عمومی ---
+
+        function checkWin(player) {
+            return winningConditions.some(condition => {
+                return condition.every(index => gameState[index] === player);
+            });
+        }
+
+        function checkDraw() {
+            return !gameState.includes("");
+        }
+
+        function endGame(message, resultType) {
+            statusDisplay.innerText = message;
+            gameActive = false;
+            if (resultType === 'win') stats.wins++;
+            else if (resultType === 'lose') stats.losses++;
+            else stats.draws++;
+            updateScoreUI();
+        }
+
+        function resetGame() {
+            gameActive = true;
+            gameState = ["", "", "", "", "", "", "", "", ""];
+            statusDisplay.innerText = "نوبت شماست (X)";
+            cells.forEach(cell => {
+                cell.innerText = "";
+                cell.classList.remove('x', 'o');
+            });
+        }
+
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+    </script>
+</body>
+</html>
